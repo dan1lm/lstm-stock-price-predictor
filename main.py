@@ -1,37 +1,44 @@
 import numpy as np
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
-
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
-
-from alpha_vantage.timeseries import TimeSeries 
-
-import os
-from dotenv import load_dotenv
-from config import config, ALPHA_VANTAGE_API_KEY
+import yfinance as yf
+from config import config
+import pandas as pd
 
 def download_data(config):
-    time_series = TimeSeries(key=ALPHA_VANTAGE_API_KEY)
-    data, meta_data = time_series.get_daily_adjusted(config["alpha_vantage"]["symbol"], outputsize=config["alpha_vantage"]["outputsize"])
+    symbol = config["alpha_vantage"]["symbol"]
     
-    data_date = [date for date in data.keys()]
-    data_date.reverse()
+    data = yf.download(symbol, period="10y")
     
-    data_close_price = [float(data[date][config["alpha_vantage"]["key_adjusted_close"]]) for date in data.keys()]
-    data_close_price.reverse()
-    data_close_price = np.array(data_close_price)
+    print("Available columns:", data.columns.tolist())
+    
+    if isinstance(data.columns, pd.MultiIndex):
+        price_column = ('Close', symbol)
+    else:
+        price_column = 'Close'
+        
+    data_date = data.index.strftime('%Y-%m-%d').tolist()
+    data_close_price = data[price_column].values
     
     num_data_points = len(data_date)
     display_date_range = "from " + data_date[0] + " to " + data_date[num_data_points-1]
     print("Number data points", num_data_points, display_date_range)
+    
     return data_date, data_close_price, num_data_points, display_date_range
 
-
 if __name__ == '__main__':
-    print('Driver')
+    data_date, data_close_price, num_data_points, display_date_range = download_data(config)
+    
+    fig = figure(figsize=(25, 5), dpi=80)
+    fig.patch.set_facecolor((1.0, 1.0, 1.0))
+    
+    plt.plot(data_date, data_close_price, color=config["plots"]["color_actual"])
+    xticks = [data_date[i] if ((i%config["plots"]["xticks_interval"]==0 and (num_data_points-i) > config["plots"]["xticks_interval"]) or i==num_data_points-1) else None for i in range(num_data_points)]
+    
+    x = np.arange(0,len(xticks))
+    
+    plt.xticks(x, xticks, rotation='vertical')
+    plt.title("Daily close price for " + config["alpha_vantage"]["symbol"] + ", " + display_date_range)
+    
+    plt.grid(which='major', axis='y', linestyle='--')
+    plt.show()
